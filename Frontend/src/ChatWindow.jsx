@@ -41,7 +41,7 @@ function ChatWindow() {
         };
 
         try {
-            const response = await fetch(`${API_BASE}/api/chat`, options);
+            const response = await fetch("https://chat-gpt-ai-3x9q.onrender.com/api/chat", options);
             const res = await response.json();
             console.log(res);
             setReply(res.reply);
