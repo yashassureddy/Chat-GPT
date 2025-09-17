@@ -1,111 +1,101 @@
-import "./ChatWindow.css";
-import Chat from "./Chat.jsx";
+import "./Sidebar.css";
+import { useContext, useEffect } from "react";
 import { MyContext } from "./MyContext.jsx";
-import { useContext, useState, useEffect } from "react";
-import { PacmanLoader } from "react-spinners";
+import {v1 as uuidv1} from "uuid";
 
-// Use API base URL from environment
-const API_BASE = import.meta.env.VITE_API_URL;
+function Sidebar() {
+    const {allThreads, setAllThreads, currThreadId, setNewChat, setPrompt, setReply, setCurrThreadId, setPrevChats} = useContext(MyContext);
 
-function ChatWindow() {
-    const { 
-        prompt, 
-        setPrompt, 
-        reply, 
-        setReply, 
-        currThreadId, 
-        setPrevChats, 
-        setNewChat 
-    } = useContext(MyContext);
-
-    const [loading, setLoading] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-
-    const getReply = async () => {
-        if (!prompt.trim()) return; // prevent empty messages
-
-        setLoading(true);
-        setNewChat(false);
-
-        console.log("message ", prompt, " threadId ", currThreadId);
-
-        const options = {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                message: prompt,
-                threadId: currThreadId
-            })
-        };
-
+    const getAllThreads = async () => {
         try {
-            const response = await fetch("https://chat-gpt-ai-3x9q.onrender.com/api/chat", options);
+            const response = await fetch("http://localhost:8080/api/thread");
             const res = await response.json();
-            console.log(res);
-            setReply(res.reply);
-        } catch (err) {
+            const filteredData = res.map(thread => ({threadId: thread.threadId, title: thread.title}));
+            //console.log(filteredData);
+            setAllThreads(filteredData);
+        } catch(err) {
             console.log(err);
         }
-        setLoading(false);
     };
 
-    // Append new chat to prevChats
     useEffect(() => {
-        if (prompt && reply) {
-            setPrevChats(prevChats => [
-                ...prevChats,
-                { role: "user", content: prompt },
-                { role: "assistant", content: reply }
-            ]);
-        }
+        getAllThreads();
+    }, [currThreadId])
+
+
+    const createNewChat = () => {
+        setNewChat(true);
         setPrompt("");
-    }, [reply]);
+        setReply(null);
+        setCurrThreadId(uuidv1());
+        setPrevChats([]);
+    }
 
-    const handleProfileClick = () => {
-        setIsOpen(!isOpen);
-    };
+    const changeThread = async (newThreadId) => {
+        setCurrThreadId(newThreadId);
 
-    return (
-        <div className="chatWindow">
-            <div className="navbar">
-                <span>ChatGPT <i className="fa-solid fa-chevron-down"></i></span>
-                <div className="userIconDiv" onClick={handleProfileClick}>
-                    <span className="userIcon"><i className="fa-solid fa-user"></i></span>
-                </div>
-            </div>
+        try {
+            const response = await fetch(`http://localhost:8080/api/thread/${newThreadId}`);
+            const res = await response.json();
+            console.log(res);
+            setPrevChats(res);
+            setNewChat(false);
+            setReply(null);
+        } catch(err) {
+            console.log(err);
+        }
+    }   
 
-            {isOpen && 
-                <div className="dropDown">
-                    <div className="dropDownItem"><i className="fa-solid fa-gear"></i> Settings</div>
-                    <div className="dropDownItem"><i className="fa-solid fa-cloud-arrow-up"></i> Upgrade plan</div>
-                    <div className="dropDownItem"><i className="fa-solid fa-arrow-right-from-bracket"></i> Log out</div>
-                </div>
+    const deleteThread = async (threadId) => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/thread/${threadId}`, {method: "DELETE"});
+            const res = await response.json();
+            console.log(res);
+
+            //updated threads re-render
+            setAllThreads(prev => prev.filter(thread => thread.threadId !== threadId));
+
+            if(threadId === currThreadId) {
+                createNewChat();
             }
 
-            <Chat />
+        } catch(err) {
+            console.log(err);
+        }
+    }
 
-            <PacmanLoader color="#fff" loading={loading} />
+    return (
+        <section className="sidebar">
+            <button onClick={createNewChat}>
+                <img src="src/assets/blacklogo.png" alt="gpt logo" className="logo"></img>
+                <span><i className="fa-solid fa-pen-to-square"></i></span>
+            </button>
 
-            <div className="chatInput">
-                <div className="inputBox">
-                    <input 
-                        placeholder="Ask anything"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' ? getReply() : ''}
-                    />
-                    <div id="submit" onClick={getReply}>
-                        <i className="fa-solid fa-paper-plane"></i>
-                    </div>
-                </div>
-                <p className="info">
-                    ChatGPT can make mistakes. Check important info. See Cookie Preferences.
-                </p>
+
+            <ul className="history">
+                {
+                    allThreads?.map((thread, idx) => (
+                        <li key={idx} 
+                            onClick={(e) => changeThread(thread.threadId)}
+                            className={thread.threadId === currThreadId ? "highlighted": " "}
+                        >
+                            {thread.title}
+                            <i className="fa-solid fa-trash"
+                                onClick={(e) => {
+                                    e.stopPropagation(); //stop event bubbling
+                                    deleteThread(thread.threadId);
+                                }}
+                            ></i>
+                        </li>
+                    ))
+                }
+            </ul>
+ 
+            <div className="sign">
+                <p>By ApnaCollege &hearts;</p>
             </div>
-        </div>
-    );
+        </section>
+    )
 }
 
-export default ChatWindow;
+export default Sidebar;
