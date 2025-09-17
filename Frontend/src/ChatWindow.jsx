@@ -1,101 +1,101 @@
-import "./Sidebar.css";
-import { useContext, useEffect } from "react";
+import "./ChatWindow.css";
+import Chat from "./Chat.jsx";
 import { MyContext } from "./MyContext.jsx";
-import {v1 as uuidv1} from "uuid";
+import { useContext, useState, useEffect } from "react";
+import {ScaleLoader} from "react-spinners";
 
-function Sidebar() {
-    const {allThreads, setAllThreads, currThreadId, setNewChat, setPrompt, setReply, setCurrThreadId, setPrevChats} = useContext(MyContext);
+function ChatWindow() {
+    const {prompt, setPrompt, reply, setReply, currThreadId, setPrevChats, setNewChat} = useContext(MyContext);
+    const [loading, setLoading] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
 
-    const getAllThreads = async () => {
+    const getReply = async () => {
+        setLoading(true);
+        setNewChat(false);
+
+        console.log("message ", prompt, " threadId ", currThreadId);
+        const options = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: prompt,
+                threadId: currThreadId
+            })
+        };
+
         try {
-            const response = await fetch("http://localhost:8080/api/thread");
+            const response = await fetch("http://localhost:8080/api/chat", options);
             const res = await response.json();
-            const filteredData = res.map(thread => ({threadId: thread.threadId, title: thread.title}));
-            //console.log(filteredData);
-            setAllThreads(filteredData);
+            console.log(res);
+            setReply(res.reply);
         } catch(err) {
             console.log(err);
         }
-    };
-
-    useEffect(() => {
-        getAllThreads();
-    }, [currThreadId])
-
-
-    const createNewChat = () => {
-        setNewChat(true);
-        setPrompt("");
-        setReply(null);
-        setCurrThreadId(uuidv1());
-        setPrevChats([]);
+        setLoading(false);
     }
 
-    const changeThread = async (newThreadId) => {
-        setCurrThreadId(newThreadId);
-
-        try {
-            const response = await fetch(`http://localhost:8080/api/thread/${newThreadId}`);
-            const res = await response.json();
-            console.log(res);
-            setPrevChats(res);
-            setNewChat(false);
-            setReply(null);
-        } catch(err) {
-            console.log(err);
+    //Append new chat to prevChats
+    useEffect(() => {
+        if(prompt && reply) {
+            setPrevChats(prevChats => (
+                [...prevChats, {
+                    role: "user",
+                    content: prompt
+                },{
+                    role: "assistant",
+                    content: reply
+                }]
+            ));
         }
-    }   
 
-    const deleteThread = async (threadId) => {
-        try {
-            const response = await fetch(`http://localhost:8080/api/thread/${threadId}`, {method: "DELETE"});
-            const res = await response.json();
-            console.log(res);
+        setPrompt("");
+    }, [reply]);
 
-            //updated threads re-render
-            setAllThreads(prev => prev.filter(thread => thread.threadId !== threadId));
 
-            if(threadId === currThreadId) {
-                createNewChat();
-            }
-
-        } catch(err) {
-            console.log(err);
-        }
+    const handleProfileClick = () => {
+        setIsOpen(!isOpen);
     }
 
     return (
-        <section className="sidebar">
-            <button onClick={createNewChat}>
-                <img src="src/assets/blacklogo.png" alt="gpt logo" className="logo"></img>
-                <span><i className="fa-solid fa-pen-to-square"></i></span>
-            </button>
-
-
-            <ul className="history">
-                {
-                    allThreads?.map((thread, idx) => (
-                        <li key={idx} 
-                            onClick={(e) => changeThread(thread.threadId)}
-                            className={thread.threadId === currThreadId ? "highlighted": " "}
-                        >
-                            {thread.title}
-                            <i className="fa-solid fa-trash"
-                                onClick={(e) => {
-                                    e.stopPropagation(); //stop event bubbling
-                                    deleteThread(thread.threadId);
-                                }}
-                            ></i>
-                        </li>
-                    ))
-                }
-            </ul>
- 
-            <div className="sign">
-                <p>By ApnaCollege &hearts;</p>
+        <div className="chatWindow">
+            <div className="navbar">
+                <span>ChatGPT <i className="fa-solid fa-chevron-down"></i></span>
+                <div className="userIconDiv" onClick={handleProfileClick}>
+                    <span className="userIcon"><i className="fa-solid fa-user"></i></span>
+                </div>
             </div>
-        </section>
+            {
+                isOpen && 
+                <div className="dropDown">
+                    <div className="dropDownItem"><i class="fa-solid fa-gear"></i> Settings</div>
+                    <div className="dropDownItem"><i class="fa-solid fa-cloud-arrow-up"></i> Upgrade plan</div>
+                    <div className="dropDownItem"><i class="fa-solid fa-arrow-right-from-bracket"></i> Log out</div>
+                </div>
+            }
+            <Chat></Chat>
+
+            <ScaleLoader color="#fff" loading={loading}>
+            </ScaleLoader>
+            
+            <div className="chatInput">
+                <div className="inputBox">
+                    <input placeholder="Ask anything"
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter'? getReply() : ''}
+                    >
+                           
+                    </input>
+                    <div id="submit" onClick={getReply}><i className="fa-solid fa-paper-plane"></i></div>
+                </div>
+                <p className="info">
+                    ChatGPT can make mistakes. Check important info. See Cookie Preferences.
+                </p>
+            </div>
+        </div>
     )
 }
 
-export default Sidebar;
+export default ChatWindow;
